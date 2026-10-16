@@ -4,17 +4,33 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def obtener_dato_de_prueba(pregunta):
+
+def armar_peticion(pregunta: str):
+
     api_key = os.getenv("GEMINI_API_KEY")
     modelo = "gemini-3.5-flash-lite"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-    body = {
-        "contents": [
-            {"parts": [{"text": pregunta}]}
-        ]
-    }
+    body = {"contents": [{"parts": [{"text": pregunta}]}]}
+    return url, body
+
+
+def enviar_peticion(url: str, body: dict):
     respuesta = requests.post(url, json=body)
-    datos = respuesta.json()
+    return respuesta.json()
+
+
+def extraer_texto(datos: dict) -> str:
     return datos["candidates"][0]["content"]["parts"][0]["text"]
 
-print(obtener_dato_de_prueba("Confirma en una frase corta que esta conexión funciona"))
+
+def obtener_dato_de_prueba(pregunta: str) -> str:
+    url, body = armar_peticion(pregunta)
+    datos = enviar_peticion(url, body)
+    return extraer_texto(datos)
+
+
+if __name__ == "__main__":
+    resultado = obtener_dato_de_prueba(
+        "Enviame un mensaje OK si la conexion es exitosa"
+    )
+    print(resultado)
