@@ -40,7 +40,7 @@ def obtener_dato_de_prueba(pregunta):
 
 
 if __name__ == "__main__":
-    pregunta = "Enviame un mensaje OK si la conexion es exitosa"
+    pregunta = "Cual es la capital de Francia?"
     try:
         resultado = obtener_dato_de_prueba(pregunta)
         print(resultado)
