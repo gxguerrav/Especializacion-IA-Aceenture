@@ -118,4 +118,4 @@ Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su m
 - Procedimiento: clon en carpeta nueva, venv nuevo, `pip install -r requirements.txt`, `.env` desde `.env.example`, ejecución de la app y de las pruebas.
 - Encontrado: sin hallazgos. `requirements.txt` está completo, no hay rutas absolutas en el código y `.env` no aparece en `git status` ni en `git ls-files`.
 - Historial: `git log --all --oneline -- .env` muestra dos commits (agregado y retirado al crear el `.gitignore`), pero el archivo estaba vacío (0 bytes) cuando se agregó, así que nunca hubo una credencial real en el historial.
-- Resultado: el proyecto corre de punta a punta sin intervención manual y las 8 pruebas pasan.
+- Resultado: el proyecto corre de punta a punta sin intervención manual y las 8 pruebas pasan sin problemas.
