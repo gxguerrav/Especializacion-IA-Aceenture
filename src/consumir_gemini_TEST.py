@@ -1,74 +1,72 @@
+import json
 import os
+import re
 import requests
 from dotenv import load_dotenv
-from cprint import cprint
-import time 
 
 load_dotenv()
 
 
-def calcular_costo_peticion(datos: dict, precio_entrada: float, precio_salida: float) -> float:
-    tokens_entrada = datos["usageMetadata"]["promptTokenCount"]
-    tokens_salida = datos["usageMetadata"]["candidatesTokenCount"]
-    costo_entrada = tokens_entrada * precio_entrada
-    costo_salida = tokens_salida * precio_salida
-    costo_total = costo_entrada + costo_salida
-    return costo_total
-
-
-def armar_peticion(pregunta: str) -> tuple[str, dict]:
-    if (type(pregunta) != str):
-        raise ValueError("La pregunta debe ser una cadena de texto.")
-    api_key = os.getenv("AI_API_KEY")
+def armar_peticion(pregunta_usuario, system_instruction=None, response_schema=None):
+    if not pregunta_usuario:
+        raise ValueError("La pregunta no puede estar vacía")
+    api_key = os.getenv("GEMINI_API_KEY")
     modelo = "gemini-3.5-flash-lite"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-    body = {"contents": [{"parts": [{"text": pregunta}]}]}
+    body = {"contents": [{"parts": [{"text": pregunta_usuario}]}]}
+    if system_instruction:
+        body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+    if response_schema is not None:
+        body["generationConfig"] = {
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema,
+        }
     return url, body
 
 
-def enviar_peticion(url: str, body: dict) -> dict:
-    inicio = time.time()
-    respuesta = requests.post(url, json=body)
-    duracion = time.time() - inicio
-    cprint.info(f"Duración de la petición: {duracion} segundos")
-    return respuesta.json()
-
-
-def extraer_texto(datos: dict) -> str:
-    cprint.ok("Tokens prompt:", datos["usageMetadata"]["promptTokenCount"])
-    cprint.ok("Tokens candidates:",
-              datos["usageMetadata"]["candidatesTokenCount"])
-    cprint.ok("Tokens total:", datos["usageMetadata"]["totalTokenCount"])
-    return datos["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def obtener_dato_de_prueba(pregunta: str) -> str | None:
+def enviar_peticion(url, body):
     try:
-        url, body = armar_peticion(pregunta)
-        datos = enviar_peticion(url, body)
-        costo = calcular_costo_peticion(datos, 0.0000003, 0.0000025)
-        cprint.info(f"Costo estimado de la petición: {costo}")
-        return extraer_texto(datos)
-    except KeyError as e:
-        cprint.fatal(f"Error al extraer el dato de prueba: {e}")
-        return None
-    except Exception as e:
-        cprint.fatal(f"Error inesperado: {e}")
-        return None
+        respuesta = requests.post(url, json=body)
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError("No se pudo conectar con el servicio. Intenta de nuevo en unos segundos.")
+    try:
+        return respuesta.json()
+    except requests.exceptions.JSONDecodeError:
+        raise RuntimeError("La respuesta del servicio no llegó en el formato esperado.")
 
-def test_latencia(ciclos: int = 5):
-    latencias = []
-    for i in range(ciclos):
-        url, body = armar_peticion("Cuanto es 2 + 2? Dame solo el resultado")
-        inicio = time.time()
-        datos = enviar_peticion(url, body)
-        duracion = time.time() - inicio
-        cprint.info(f"Duración de la petición {i + 1}: {duracion} segundos")
-        latencias.append(duracion)
-    latencia_promedio = sum(latencias) / len(latencias)
-    cprint.info(f"Latencia promedio después de {ciclos} ciclos: {latencia_promedio} segundos")  
 
-# Ejemplo de uso
+def extraer_texto(datos):
+    try:
+        return datos["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        raise RuntimeError(f"La respuesta no trae el texto esperado: {datos}")
+
+
+def parsear_respuesta_json(texto, claves_esperadas=None):
+    texto_limpio = texto.strip()
+    texto_limpio = re.sub(r"^```(?:json)?\s*", "", texto_limpio)
+    texto_limpio = re.sub(r"\s*```$", "", texto_limpio)
+    try:
+        datos = json.loads(texto_limpio)
+    except json.JSONDecodeError:
+        raise ValueError("La respuesta del modelo no es JSON válido.")
+    if not isinstance(datos, dict):
+        raise ValueError("La respuesta no tiene la estructura esperada.")
+    if claves_esperadas and not all(clave in datos for clave in claves_esperadas):
+        raise ValueError("La respuesta no tiene la estructura esperada.")
+    return datos
+
+
+def obtener_dato_de_prueba(pregunta):
+    url, body = armar_peticion(pregunta)
+    datos = enviar_peticion(url, body)
+    return extraer_texto(datos)
+
+
 if __name__ == "__main__":
-    cprint.ok(obtener_dato_de_prueba("¿Cuál es la capital de Escocia? Dame solo el nombre"))
-    test_latencia(10)
+    pregunta = "Cual es la capital de Francia?"
+    try:
+        resultado = obtener_dato_de_prueba(pregunta)
+        print(resultado)
+    except (ValueError, RuntimeError) as error:
+        print("No se pudo completar la operación:", error)

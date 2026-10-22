@@ -1,17 +1,26 @@
+import json
 import os
+import re
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def armar_peticion(pregunta):
-    if not pregunta:
+def armar_peticion(pregunta_usuario, system_instruction=None, response_schema=None):
+    if not pregunta_usuario:
         raise ValueError("La pregunta no puede estar vacía")
     api_key = os.getenv("GEMINI_API_KEY")
-    modelo = "gemini-3.5-flash"
+    modelo = "gemini-3.5-flash-lite"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-    body = {"contents": [{"parts": [{"text": pregunta}]}]}
+    body = {"contents": [{"parts": [{"text": pregunta_usuario}]}]}
+    if system_instruction:
+        body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+    if response_schema is not None:
+        body["generationConfig"] = {
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema,
+        }
     return url, body
 
 
@@ -33,6 +42,21 @@ def extraer_texto(datos):
         raise RuntimeError(f"La respuesta no trae el texto esperado: {datos}")
 
 
+def parsear_respuesta_json(texto, claves_esperadas=None):
+    texto_limpio = texto.strip()
+    texto_limpio = re.sub(r"^```(?:json)?\s*", "", texto_limpio)
+    texto_limpio = re.sub(r"\s*```$", "", texto_limpio)
+    try:
+        datos = json.loads(texto_limpio)
+    except json.JSONDecodeError:
+        raise ValueError("La respuesta del modelo no es JSON válido.")
+    if not isinstance(datos, dict):
+        raise ValueError("La respuesta no tiene la estructura esperada.")
+    if claves_esperadas and not all(clave in datos for clave in claves_esperadas):
+        raise ValueError("La respuesta no tiene la estructura esperada.")
+    return datos
+
+
 def obtener_dato_de_prueba(pregunta):
     url, body = armar_peticion(pregunta)
     datos = enviar_peticion(url, body)
@@ -40,7 +64,7 @@ def obtener_dato_de_prueba(pregunta):
 
 
 if __name__ == "__main__":
-    pregunta = "Cual es la capital de Francia?"
+    pregunta = "Hola, quiero comprar un cilindro de gas de 15 kilos."
     try:
         resultado = obtener_dato_de_prueba(pregunta)
         print(resultado)

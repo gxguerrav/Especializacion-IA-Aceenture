@@ -1,0 +1,14 @@
+{
+  "clasificar_intencion": {
+    "exitos": 3,
+    "intentos": 3
+  },
+  "extraer_pedido": {
+    "exitos": 3,
+    "intentos": 3
+  },
+  "respuesta_de_venta": {
+    "exitos": 3,
+    "intentos": 3
+  }
+}
