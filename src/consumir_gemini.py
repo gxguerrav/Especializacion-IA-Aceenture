@@ -6,13 +6,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+MODELO = "gemini-3.5-flash-lite"
+TIMEOUT_SEGUNDOS = 60
+
 
 def armar_peticion(pregunta_usuario, system_instruction=None, response_schema=None):
     if not pregunta_usuario:
         raise ValueError("La pregunta no puede estar vacía")
-    api_key = os.getenv("GEMINI_API_KEY")
-    modelo = "gemini-3.5-flash-lite"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
+    if not os.getenv("GEMINI_API_KEY"):
+        raise ValueError("Falta GEMINI_API_KEY: copia .env.example a .env y completa tu llave.")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELO}:generateContent"
     body = {"contents": [{"parts": [{"text": pregunta_usuario}]}]}
     if system_instruction:
         body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
@@ -26,7 +29,14 @@ def armar_peticion(pregunta_usuario, system_instruction=None, response_schema=No
 
 def enviar_peticion(url, body):
     try:
-        respuesta = requests.post(url, json=body)
+        respuesta = requests.post(
+            url,
+            json=body,
+            headers={"x-goog-api-key": os.getenv("GEMINI_API_KEY", "")},
+            timeout=TIMEOUT_SEGUNDOS,
+        )
+    except requests.exceptions.Timeout:
+        raise RuntimeError("El servicio tardó demasiado en responder. Intenta de nuevo.")
     except requests.exceptions.ConnectionError:
         raise RuntimeError("No se pudo conectar con el servicio. Intenta de nuevo en unos segundos.")
     try:
@@ -39,7 +49,8 @@ def extraer_texto(datos):
     try:
         return datos["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
-        raise RuntimeError(f"La respuesta no trae el texto esperado: {datos}")
+        detalle = datos.get("error", {}).get("message", "respuesta sin texto")
+        raise RuntimeError(f"La respuesta no trae el texto esperado: {detalle}")
 
 
 def parsear_respuesta_json(texto, claves_esperadas=None):
@@ -62,11 +73,3 @@ def obtener_dato_de_prueba(pregunta):
     datos = enviar_peticion(url, body)
     return extraer_texto(datos)
 
-
-if __name__ == "__main__":
-    pregunta = "Hola, quiero comprar un cilindro de gas de 15 kilos."
-    try:
-        resultado = obtener_dato_de_prueba(pregunta)
-        print(resultado)
-    except (ValueError, RuntimeError) as error:
-        print("No se pudo completar la operación:", error)

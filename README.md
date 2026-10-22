@@ -1,71 +1,121 @@
-# Diplomado en IA Generativa (Accenture)
+# Especialización en Desarrollo con IA Generativa (Accenture)
 
-Mi repositorio del diplomado. Acá voy dejando el trabajo de cada módulo. Lo que hay hoy es la miniaplicación del Módulo 1 (Gate 1): un script en Python que le manda una pregunta a la API de Gemini y procesa la respuesta, con un banco de prompts que devuelven JSON.
+Repositorio único del Diplomado. En este momento contiene la miniaplicación del **Módulo 1 (Gate 1)**: un asistente de ventas de gas en cilindros que usa la API de Gemini. Dado el mensaje de un cliente, el asistente identifica qué quiere, extrae los datos del pedido y le responde, siempre con salida JSON validada.
+
+## Requisitos
+
+- Python 3.10 o superior
+- Git
+- Una API key de Gemini (Google AI Studio)
 
 ## Instalación
 
-Necesitas Python 3 y Git. En PowerShell (Windows):
+1. Clona el repositorio y entra a la carpeta:
+   ```powershell
+   git clone https://github.com/gxguerrav/Especializacion-IA-Aceenture.git
+   cd Especializacion-IA-Aceenture
+   ```
+2. Crea y activa el entorno virtual:
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   ```
+   En macOS, Linux o WSL:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. Instala las dependencias:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+4. Crea tu archivo `.env` a partir de la plantilla y completa tu llave:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+   En macOS, Linux o WSL: `cp .env.example .env`. Luego abre `.env` y escribe tu llave en `GEMINI_API_KEY=""`.
+
+El archivo `.env` está en `.gitignore` y nunca se sube al repositorio.
+
+## Cómo ejecutar
+
+Conversación con el asistente (escribe `salir` para terminar):
 
 ```powershell
-git clone https://github.com/gxguerrav/Especializacion-IA-Aceenture.git
-cd Especializacion-IA-Aceenture
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
+python src/main.py
 ```
 
-En macOS, Linux o WSL cambia `python` por `python3`, la activación por `source venv/bin/activate` y `Copy-Item` por `cp`.
-
-Después abre el `.env` y pega tu llave en `GEMINI_API_KEY` (se saca en Google AI Studio). El `.env` está en el `.gitignore`, así que no se sube.
-
-## Cómo correrlo
+Un solo mensaje, sin interacción:
 
 ```powershell
-python src/consumir_gemini.py
+python src/main.py "Quiero 2 cilindros de 15 kilos, mi dirección es Av. Los Leones 1234, Providencia."
 ```
 
-Hace una consulta de prueba y muestra la respuesta del modelo. Si algo falla (pregunta vacía, falta la llave, no hay conexión, timeout o una respuesta que no se puede leer), imprime un mensaje corto en vez de un error largo.
+Ejemplo de salida:
+
+```
+  [intención: comprar (0.99)]
+  [pedido: 2 x 15 kg -> Av. Los Leones 1234, Providencia]
+Asistente: ¡Perfecto! El total por 2 cilindros de 15 kg es $54.000 con despacho gratuito. ¿Deseas confirmar tu pedido?
+  [total: $54.000]
+```
 
 Otros comandos:
 
 ```powershell
-python -m unittest discover tests      # pruebas del módulo, no usan la API
-python prompts/test_consistencia.py    # prueba cada prompt 3 veces contra la API real
+python -m unittest discover tests      # pruebas automatizadas (no usan la API)
+python prompts/test_consistencia.py    # mide qué tan consistente es el JSON de cada prompt (usa la API)
 ```
 
-## Cómo está armado
+Si la API responde con un error de cuota o "alta demanda" (429 o 503), es temporal y viene de Google: el programa muestra un mensaje claro, sin trazas. Vuelve a intentar en un momento.
 
-El módulo `src/consumir_gemini.py` tiene las funciones separadas:
+## Cómo funciona
 
-- `armar_peticion`: valida la pregunta y la llave, y arma la URL y el cuerpo de la petición.
-- `enviar_peticion`: hace el POST (la llave va en un header, no en la URL) y devuelve el JSON.
-- `extraer_texto`: saca el texto de la respuesta.
-- `parsear_respuesta_json`: limpia y valida las respuestas que deben venir en JSON.
+Por cada mensaje del cliente, `src/main.py` encadena tres prompts del banco:
 
-El modelo es `gemini-3.5-flash-lite`. Por qué lo elegí y contra qué lo comparé está en [docs/decision-arquitectura.md](docs/decision-arquitectura.md), y el flujo completo está en el diagrama [docs/diagrama_arquitectura.drawio.png](docs/diagrama_arquitectura.drawio.png).
+1. `clasificar_intencion`: comprar, cotizar, consultar pedido, reclamo u otro.
+2. `extraer_pedido`: tipo de cilindro, cantidad, dirección y datos faltantes (solo si quiere comprar o cotizar).
+3. `respuesta_de_venta`: mensaje para el cliente, total y siguiente paso, con el catálogo de precios.
 
-## Banco de prompts
+El módulo `src/consumir_gemini.py` separa el consumo de la API en funciones con una sola responsabilidad:
 
-En `prompts/banco.py` hay tres prompts para una empresa de gas en cilindros, cada uno con su instrucción de sistema separada del mensaje del usuario y con un esquema de salida JSON:
-
-| Prompt | Para qué sirve |
+| Función | Qué hace |
 |---|---|
-| `clasificar_intencion` | Dice si el mensaje es una compra, cotización, reclamo, etc. |
-| `extraer_pedido` | Saca tipo de cilindro, cantidad y dirección |
-| `respuesta_de_venta` | Responde al cliente usando el catálogo y calcula el total |
+| `armar_peticion` | Valida la entrada y la llave, y arma la URL y el cuerpo (prompt de sistema aparte del mensaje del usuario, y esquema JSON). |
+| `enviar_peticion` | Hace el POST con timeout y traduce fallos de conexión a mensajes claros. |
+| `extraer_texto` | Saca el texto de la respuesta, o informa el error que devolvió la API. |
+| `parsear_respuesta_json` | Limpia bloques markdown, valida que sea JSON y que traiga las claves esperadas. |
 
-`prompts/test_consistencia.py` llama a cada prompt 3 veces y guarda cuántas respuestas fueron JSON válido en `prompts/registro_resultados.json`. En mi última corrida salió 3 de 3 en los tres prompts. La captura está en `docs/Evidencia de test de consistencia.png`.
+## Banco de prompts y consistencia
 
-## Carpetas
+Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su mensaje de ejemplo, las claves esperadas y su esquema de respuesta. `prompts/test_consistencia.py` ejecuta cada prompt 3 veces y guarda el resultado en `prompts/registro_resultados.json`: los tres prompts dieron 3/3 respuestas válidas.
 
-- `src/`: código de la miniaplicación
-- `prompts/`: banco de prompts y su prueba de consistencia
-- `tests/`: pruebas unitarias
-- `docs/`: decisión de modelo, diagrama y capturas de evidencia
-- `Modulo_1/`, `Tareas/`: material de las actividades del diplomado
+## Estructura de carpetas
 
-## Credenciales
+- `src/` : código fuente (`main.py` y `consumir_gemini.py`).
+- `prompts/` : banco de prompts, test de consistencia y su registro de resultados.
+- `docs/` : diagrama de arquitectura, decisión de modelo y evidencias.
+- `tests/` : pruebas automatizadas.
+- `Tareas/` : entregables y formularios de las distintas unidades.
+- `Modulo_1/` : material específico del módulo 1.
+- `requirements.txt` : dependencias de Python.
+- `.env.example` : plantilla de variables de entorno, sin valores reales.
+- `.gitignore` : excluye el entorno virtual, `.env`, cachés y logs.
 
-Ninguna llave va escrita en el código ni en archivos que se suban. Solo está en mi `.env` local; en el repo queda el `.env.example` con los nombres de las variables y sin valores.
+## Documentación
 
+- Diagrama de arquitectura: `docs/diagrama_arquitectura.drawio.png`
+- Decisión de modelo (`gemini-3.5-flash-lite`): `docs/decision-arquitectura.md`
+
+## Seguridad
+
+- Ninguna credencial va escrita en el código ni en archivos versionados. La llave se lee de `GEMINI_API_KEY` en el `.env` y se envía por header, no en la URL.
+- `.env` está excluido con `.gitignore`; `.env.example` solo trae la plantilla vacía.
+
+## Registro del ensayo de instalación limpia
+
+- Fecha: 2026-10-22
+- Procedimiento: clon en carpeta nueva, venv nuevo, `pip install -r requirements.txt`, `.env` desde `.env.example`, ejecución de la app y de las pruebas.
+- Encontrado: sin hallazgos. `requirements.txt` está completo, no hay rutas absolutas en el código y `.env` no aparece en `git status` ni en `git ls-files`.
+- Historial: `git log --all --oneline -- .env` muestra dos commits (agregado y retirado al crear el `.gitignore`), pero el archivo estaba vacío (0 bytes) cuando se agregó, así que nunca hubo una credencial real en el historial.
+- Resultado: el proyecto corre de punta a punta sin intervención manual y las 8 pruebas pasan.
