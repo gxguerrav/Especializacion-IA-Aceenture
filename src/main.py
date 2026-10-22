@@ -16,7 +16,7 @@ from consumir_gemini import (
     extraer_texto,
     parsear_respuesta_json,
 )
-from banco import BANCO_DE_PROMPTS
+from banco import BANCO_DE_PROMPTS # type: ignore porque está en un directorio diferente
 
 PROMPTS = {prompt["nombre"]: prompt for prompt in BANCO_DE_PROMPTS}
 INTENCIONES_DE_COMPRA = ("comprar", "cotizar")
