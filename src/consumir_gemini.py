@@ -35,10 +35,14 @@ def enviar_peticion(url, body):
             headers={"x-goog-api-key": os.getenv("GEMINI_API_KEY", "")},
             timeout=TIMEOUT_SEGUNDOS,
         )
-    except requests.exceptions.Timeout:
-        raise RuntimeError("El servicio tardó demasiado en responder. Intenta de nuevo.")
-    except requests.exceptions.ConnectionError:
-        raise RuntimeError("No se pudo conectar con el servicio. Intenta de nuevo en unos segundos.")
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        raise TimeoutError("No se pudo contactar al proveedor. Puede ser momentáneo.")
+    if respuesta.status_code in (401, 403):
+        raise ValueError("Credencial inválida o sin permiso. Revisa tu GEMINI_API_KEY.")
+    if respuesta.status_code == 429 or respuesta.status_code >= 500:
+        segundos = respuesta.headers.get("Retry-After")
+        detalle = f" Reintentar en {segundos}s." if segundos else ""
+        raise TimeoutError(f"El proveedor no pudo procesar la petición.{detalle} Hay que esperar y reintentar.")
     try:
         return respuesta.json()
     except requests.exceptions.JSONDecodeError:
