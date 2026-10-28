@@ -103,13 +103,11 @@ def test_con_reintento_backoff_respeta_techo():
     def siempre_falla():
         raise TimeoutError("simulado")
 
-    with patch("cliente.time.sleep") as mock_sleep:
+    with patch("cliente.time.sleep") as mock_sleep, patch("cliente.random.uniform", return_value=0):
         with pytest.raises(TimeoutError):
             cliente.con_reintento(siempre_falla, intentos=6, espera_base=2, espera_maxima=10)
     esperas = [llamada.args[0] for llamada in mock_sleep.call_args_list]
-    assert len(esperas) == 5
-    assert esperas == sorted(esperas)
-    assert all(espera <= 10 * 1.1 for espera in esperas)
+    assert esperas == [2, 4, 8, 10, 10]
 
 
 # --- registrar costo ------------

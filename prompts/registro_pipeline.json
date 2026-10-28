@@ -1,0 +1,23 @@
+[
+  {
+    "consulta": "¿Qué es el gas licuado de petróleo (GLP)? Responde en una sola oración.",
+    "referencia": "El gas licuado de petróleo es una mezcla de propano y butano que se usa como combustible.",
+    "respuesta": "El gas licuado de petróleo (GLP) es una mezcla de hidrocarburos, principalmente propano y butano, que se mantiene en estado líquido mediante presión para su fácil almacenamiento, transporte y uso como combustible.",
+    "coincidencia_cruda": 0.875,
+    "coincidencia_procesada": 0.9375
+  },
+  {
+    "consulta": "¿Qué debo hacer si siento olor a gas en mi casa? Responde en una sola oración.",
+    "referencia": "Cierra la llave del cilindro, ventila el lugar y no enciendas fuego ni aparatos eléctricos.",
+    "respuesta": "Evacúa la casa de inmediato sin encender luces ni usar aparatos eléctricos, abre las puertas y ventanas que puedas al pasar, y llama a los servicios de emergencia o a la compañía de gas desde el exterior.",
+    "coincidencia_cruda": 0.3333333333333333,
+    "coincidencia_procesada": 0.4
+  },
+  {
+    "consulta": "¿Cada cuánto debo revisar las mangueras de mi balón de gas? Responde en una sola oración.",
+    "referencia": "Debes revisar las mangueras de tu balón de gas periódicamente y cambiarlas si están dañadas o vencidas.",
+    "respuesta": "Debes revisar las mangueras de tu balón de gas **al menos una vez al mes** o cada vez que cambies el cilindro.",
+    "coincidencia_cruda": 0.5625,
+    "coincidencia_procesada": 0.5625
+  }
+]

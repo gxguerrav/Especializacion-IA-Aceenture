@@ -100,6 +100,22 @@ El módulo `src/consumir_gemini.py` separa el consumo de la API en funciones con
 
 Las pruebas (`tests/test_cliente.py`, 18 casos) cubren `enviar_peticion`, `con_reintento`, `registrar_costo` y `consultar_modelo` con mocks de `requests.post` y `time.sleep`.
 
+## Pipeline de texto (`src/pipeline_texto.py`)
+
+Deja el texto en un formato comparable antes de medir las salidas del cliente:
+
+| Función | Qué hace |
+|---|---|
+| `limpiar_texto` | Minúsculas, sin puntuación y sin espacios repetidos. Lanza `TypeError` si no recibe `str`. |
+| `tokenizar` | Separa el texto limpio en una lista de palabras. |
+| `procesar_texto` | Junta las dos anteriores para no olvidar ninguna. |
+| `vectorizar` | Cuenta cuántas veces aparece cada token (bolsa de palabras). |
+| `coincidencia` | Proporción de palabras de la referencia presentes en la respuesta; devuelve 0.0 si la referencia queda vacía. |
+
+`src/evaluar_pipeline.py` consulta al modelo con tres preguntas sobre gas (qué es el GLP, olor a gas, mangueras), las compara con una referencia propia y guarda la coincidencia sobre texto crudo y procesado en `prompts/registro_pipeline.json`. Resultado: 87.5 % → 93.8 %, 26.7 % → 33.3 % y 56.2 % → 56.2 %. La métrica no distingue orden ni repeticiones, así que no reemplaza leer la respuesta.
+
+Las pruebas (`tests/test_pipeline_texto.py`, 11 casos) no usan red ni mocks.
+
 ## Banco de prompts y consistencia
 
 Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su mensaje de ejemplo, las claves esperadas y su esquema de respuesta. `prompts/test_consistencia.py` ejecuta cada prompt 3 veces y guarda el resultado en `prompts/registro_resultados.json`: los tres prompts dieron 3/3 respuestas válidas.
