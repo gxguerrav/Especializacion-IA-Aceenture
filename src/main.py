@@ -53,7 +53,7 @@ def atender_mensaje(mensaje):
 def responder(mensaje):
     try:
         atender_mensaje(mensaje)
-    except (ValueError, RuntimeError) as error:
+    except (ValueError, RuntimeError, TimeoutError) as error:
         print("No se pudo completar la operación:", error)
 
 

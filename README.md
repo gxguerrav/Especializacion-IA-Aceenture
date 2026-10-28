@@ -86,6 +86,20 @@ El módulo `src/consumir_gemini.py` separa el consumo de la API en funciones con
 | `extraer_texto` | Saca el texto de la respuesta, o informa el error que devolvió la API. |
 | `parsear_respuesta_json` | Limpia bloques markdown, valida que sea JSON y que traiga las claves esperadas. |
 
+## Cliente modular (`src/cliente.py`)
+
+`consultar_modelo` es la única función pública; por dentro orquesta:
+
+| Función | Qué hace |
+|---|---|
+| `con_reintento` | Reintenta solo ante `TimeoutError`, con backoff exponencial (2, 4, 8 s...), techo de 30 s y jitter de hasta 10 %. |
+| `registrar_costo` | Lee `usageMetadata.totalTokenCount`, estima el costo y lo acumula en `costo_total_sesion`. Solo se llama tras una respuesta exitosa. |
+| `consultar_modelo` | Convierte el `TimeoutError` agotado en `RuntimeError`; un `ValueError` (credencial) se propaga sin reintentar. |
+
+`COSTO_POR_1000_TOKENS` es un valor referencial: ajústalo al precio real del modelo.
+
+Las pruebas (`tests/test_cliente.py`, 18 casos) cubren `enviar_peticion`, `con_reintento`, `registrar_costo` y `consultar_modelo` con mocks de `requests.post` y `time.sleep`.
+
 ## Banco de prompts y consistencia
 
 Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su mensaje de ejemplo, las claves esperadas y su esquema de respuesta. `prompts/test_consistencia.py` ejecuta cada prompt 3 veces y guarda el resultado en `prompts/registro_resultados.json`: los tres prompts dieron 3/3 respuestas válidas.
@@ -119,3 +133,12 @@ Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su m
 - Encontrado: sin hallazgos. `requirements.txt` está completo, no hay rutas absolutas en el código y `.env` no aparece en `git status` ni en `git ls-files`.
 - Historial: `git log --all --oneline -- .env` muestra dos commits (agregado y retirado al crear el `.gitignore`), pero el archivo estaba vacío (0 bytes) cuando se agregó, así que nunca hubo una credencial real en el historial.
 - Resultado: el proyecto corre de punta a punta sin intervención manual y las 8 pruebas pasan sin problemas.
+
+## Registro del ensayo de rate limit
+
+- Fecha: 2026-10-27
+- Peticiones enviadas: 10
+- Petición donde apareció el primer 429: No se alcanzo el limite de uso
+- Esperas observadas: Ninguna (no hubo reintentos)
+- Costo total del ensayo: $0.00091
+- Resultado: las 10 peticiones terminaron con éxito a la primera; el registro de costo acumuló correctamente en cada operación
