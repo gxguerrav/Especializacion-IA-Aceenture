@@ -109,3 +109,23 @@ def test_ordenar_peores_casos_pone_el_f1_menor_primero():
     resultados = [{"consulta": "a", "f1": 0.9}, {"consulta": "b", "f1": 0.1}, {"consulta": "c", "f1": 0.5}]
     orden = [r["consulta"] for r in ordenar_peores_casos(resultados)]
     assert orden == ["b", "c", "a"]
+
+
+# Límites encontrados en la revisión manual del Bloque 17 (docs/limites_metrica.md)
+def test_limite_signo_menos_se_pierde_al_limpiar():
+    referencia = "El propano hierve a menos 42 grados Celsius."
+    con_signo = calcular_metricas(referencia, "El propano hierve a -42 °C.")
+    sin_signo = calcular_metricas(referencia, "El propano hierve a 42 °C.")
+    assert con_signo["f1"] == sin_signo["f1"]
+
+
+def test_limite_cifra_en_letras_y_dato_equivocado_puntuan_igual():
+    referencia = "El regulador debe cambiarse cada cinco años."
+    correcta = calcular_metricas(referencia, "El regulador debe cambiarse cada 5 años.")
+    equivocada = calcular_metricas(referencia, "El regulador debe cambiarse cada seis años.")
+    assert correcta["f1"] == equivocada["f1"]
+
+
+def test_limite_rangos_y_barras_se_pegan_en_un_solo_token():
+    assert procesar_texto("3-4 semanas") == ["34", "semanas"]
+    assert procesar_texto("gas/aire") == ["gasaire"]
