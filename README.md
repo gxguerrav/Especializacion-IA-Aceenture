@@ -116,6 +116,22 @@ Deja el texto en un formato comparable antes de medir las salidas del cliente:
 
 Las pruebas (`tests/test_pipeline_texto.py`, 11 casos) no usan red ni mocks.
 
+## Chain de tres pasos con LangChain (`src/cadena_tres_pasos.py`)
+
+Atiende un mensaje de cliente encadenando tres `PromptTemplate`, cada uno con una responsabilidad:
+
+1. `plantilla_clasificar`: ubica el mensaje en un tema (pedido, cotizacion, reclamo u otro).
+2. `plantilla_redactar`: escribe un borrador según ese tema, usando solo el catálogo.
+3. `plantilla_revisar`: corrige el tono y quita promesas sin respaldo.
+
+`construir_cadena(modelo)` recibe el modelo como parámetro y devuelve la chain sin ejecutarla, así las pruebas (`tests/test_cadena_tres_pasos.py`, 5 casos) usan un mock y no gastan tokens. Para correrla con la API: `python src/cadena_tres_pasos.py`.
+
+Ejemplo de corrida real (reclamo por válvula dañada y consulta de precio del cilindro de 45 kg):
+
+> Lamentamos el inconveniente con tu cilindro de 15 kg; gestionaremos la solicitud a la brevedad. El cilindro de 45 kg tiene un valor de $75.000. Quedamos a tu disposición para coordinar el retiro y la nueva entrega.
+
+`gemini-3.5-flash-lite` usa valores de muestreo fijos, por eso la chain no fija `temperature`. La revisión del paso 3 todavía deja pasar promesas de plazo ("a la brevedad"), una mejora pendiente del prompt.
+
 ## Banco de prompts y consistencia
 
 Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su mensaje de ejemplo, las claves esperadas y su esquema de respuesta. `prompts/test_consistencia.py` ejecuta cada prompt 3 veces y guarda el resultado en `prompts/registro_resultados.json`: los tres prompts dieron 3/3 respuestas válidas.
