@@ -132,6 +132,15 @@ Ejemplo de corrida real (reclamo por válvula dañada y consulta de precio del c
 
 `gemini-3.5-flash-lite` usa valores de muestreo fijos, por eso la chain no fija `temperature`. La revisión del paso 3 todavía deja pasar promesas de plazo ("a la brevedad"), una mejora pendiente del prompt.
 
+## Enrutamiento y manejo de errores (`src/enrutamiento.py`)
+
+Clasifica el mensaje (pedido, cotizacion, reclamo u otro) y lo envía a una ruta con su propio prompt; una categoría desconocida cae en la ruta `otro`. Protecciones ante fallos:
+
+- **Por ruta:** cada ruta usa `with_fallbacks([respuesta_generica])`; si el modelo falla, el cliente recibe un texto genérico ("un miembro de nuestro equipo te va a responder pronto") en vez de una excepción.
+- **Flujo completo:** `procesar_mensaje_seguro(cadena, mensaje)` envuelve `.invoke()` en `try/except`, registra el error con `logger.exception` (incluye traceback) y devuelve un mensaje seguro. Cubre fallos fuera de las rutas, como la clasificación.
+
+Pruebas sin red: `tests/test_enrutamiento.py` (clasificación y bifurcación, incluida la ruta por defecto) y `tests/test_orquestacion.py` (fallback de ruta, fallo en la clasificación, registro del error). Se corren con `python -m pytest tests -v`.
+
 ## Banco de prompts y consistencia
 
 Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su mensaje de ejemplo, las claves esperadas y su esquema de respuesta. `prompts/test_consistencia.py` ejecuta cada prompt 3 veces y guarda el resultado en `prompts/registro_resultados.json`: los tres prompts dieron 3/3 respuestas válidas.

@@ -10,13 +10,28 @@ El modelo y las rutas entran como parámetros para poder reemplazarlos por mocks
 
 Ejecutar: python src/enrutamiento.py
 """
+import logging
+
 from dotenv import load_dotenv
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnableBranch, RunnablePassthrough
+from langchain_core.runnables import RunnableBranch, RunnableLambda, RunnablePassthrough
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+logger = logging.getLogger(__name__)
+
 MODELO = "gemini-3.5-flash-lite"
+
+MENSAJE_ERROR_FINAL = (
+    "No pudimos procesar tu mensaje en este momento. Intenta de nuevo más tarde."
+)
+
+# Fallback de las rutas: texto fijo, último recurso si el modelo falla.
+respuesta_generica = RunnableLambda(
+    lambda x: (
+        "Gracias por tu mensaje. Un miembro de nuestro equipo te va a responder pronto."
+    )
+)
 
 CATALOGO = (
     "Catálogo: cilindro de 5 kg $12.000, de 11 kg $20.000, "
@@ -78,13 +93,20 @@ def _construir_ruta(plantilla, modelo):
     )
 
 
+def construir_cadena_queja_segura(cadena_queja):
+    """Ruta de reclamo protegida: si falla, responde con el texto genérico en vez de propagar el error."""
+    return cadena_queja.with_fallbacks([respuesta_generica])
+
+
 def construir_rutas(modelo):
-    """Devuelve las cuatro rutas reales armadas con el modelo recibido."""
+    """Devuelve las cuatro rutas reales armadas con el modelo recibido, cada una con su fallback."""
     return {
-        "pedido": _construir_ruta(plantilla_pedido, modelo),
-        "cotizacion": _construir_ruta(plantilla_cotizacion, modelo),
-        "reclamo": _construir_ruta(plantilla_reclamo, modelo),
-        "otro": _construir_ruta(plantilla_otro, modelo),
+        "pedido": _construir_ruta(plantilla_pedido, modelo).with_fallbacks([respuesta_generica]),
+        "cotizacion": _construir_ruta(plantilla_cotizacion, modelo).with_fallbacks(
+            [respuesta_generica]
+        ),
+        "reclamo": construir_cadena_queja_segura(_construir_ruta(plantilla_reclamo, modelo)),
+        "otro": _construir_ruta(plantilla_otro, modelo).with_fallbacks([respuesta_generica]),
     }
 
 
@@ -126,7 +148,20 @@ def construir_cadena(modelo):
     )
 
 
+def procesar_mensaje_seguro(cadena, mensaje):
+    """
+    Red de seguridad final: ningún fallo (ni siquiera en la clasificación) deja sin respuesta.
+    El error se registra con traceback antes de devolver el mensaje seguro.
+    """
+    try:
+        return cadena.invoke({"mensaje": mensaje})
+    except Exception:
+        logger.exception("Error procesando mensaje")
+        return MENSAJE_ERROR_FINAL
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     load_dotenv()
     cadena = construir_cadena(ChatGoogleGenerativeAI(model=MODELO))
 
@@ -137,4 +172,4 @@ if __name__ == "__main__":
         "Buenas tardes, ¿a qué hora abren?",
     ):
         print(f"> {mensaje_cliente}")
-        print(cadena.invoke({"mensaje": mensaje_cliente}), end="\n\n")
+        print(procesar_mensaje_seguro(cadena, mensaje_cliente), end="\n\n")
