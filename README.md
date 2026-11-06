@@ -183,3 +183,16 @@ Los prompts viven en `prompts/banco.py`, cada uno con su prompt de sistema, su m
 - Esperas observadas: Ninguna (no hubo reintentos)
 - Costo total del ensayo: $0.00091
 - Resultado: las 10 peticiones terminaron con éxito a la primera; el registro de costo acumuló correctamente en cada operación
+
+## Agente con herramientas (`src/agente_con_herramientas.py`)
+
+A diferencia de la chain, aquí el modelo decide qué acción tomar. El agente (`create_tool_calling_agent` + `AgentExecutor`) tiene dos herramientas con `@tool`:
+
+| Herramienta | Cuándo se usa |
+|---|---|
+| `consultar_estado_pedido` | El cliente pregunta dónde está su pedido (por número, ej. GAS-1001). |
+| `calcular_costo_pedido` | El cliente pregunta cuánto cuesta cierta cantidad de cilindros de un tamaño. |
+
+Ambas devuelven texto, también ante errores (pedido inexistente, cilindro que no existe), para que el agente pueda seguir razonando en vez de caerse. `return_intermediate_steps=True` permite verificar qué herramienta eligió.
+
+`python src/agente_con_herramientas.py` hace tres pruebas manuales con la API y confirma en `intermediate_steps` que cada pregunta usa la herramienta correcta, y que una pregunta general no usa ninguna. El prompt le pide no inventar datos que no tenga (teléfonos, correos), porque sin esa instrucción los inventaba.

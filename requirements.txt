@@ -9,4 +9,8 @@ Pygments==2.21.0
 pytest==9.2.0
 python-dotenv==1.2.4
 requests==2.34.2
-urllib3==2.8.0
+urllib3==2.8.
+langchain==1.4.8
+langchain-classic==1.0.8
+langchain-core==1.7.4
+langchain-google-genai==4.4.2
