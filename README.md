@@ -196,3 +196,15 @@ A diferencia de la chain, aquí el modelo decide qué acción tomar. El agente (
 Ambas devuelven texto, también ante errores (pedido inexistente, cilindro que no existe), para que el agente pueda seguir razonando en vez de caerse. `return_intermediate_steps=True` permite verificar qué herramienta eligió.
 
 `python src/agente_con_herramientas.py` hace tres pruebas manuales con la API y confirma en `intermediate_steps` que cada pregunta usa la herramienta correcta, y que una pregunta general no usa ninguna. El prompt le pide no inventar datos que no tenga (teléfonos, correos), porque sin esa instrucción los inventaba.
+
+## Herramienta personalizada y memoria (Bloque 22)
+
+Sobre el mismo agente se agregaron dos piezas:
+
+- **Herramientas con `args_schema` (Pydantic):** cada parámetro tiene su propia descripción y se valida antes de ejecutar la función. `consultar_estado_pedido` ahora se llama `consultar_estado_pedido_con_historial` (nombre explícito, el que sale en la traza) y recibe `numero_pedido` e `incluir_historial` (por defecto `False`). `calcular_costo_pedido` también usa `args_schema`.
+- **Memoria entre turnos:** `crear_agente_con_memoria` envuelve el ejecutor con `RunnableWithMessageHistory`. El prompt tiene `chat_history` antes del mensaje humano y `agent_scratchpad` después. Cada llamada necesita `config={"configurable": {"session_id": ...}}`; sesiones distintas tienen historiales separados.
+- **Salida normalizada a texto:** Gemini devuelve `output` como lista de bloques. Si esa lista se guarda tal cual en el historial, el segundo turno falla al reconstruir los mensajes. Por eso el ejecutor se encadena con una función que convierte la salida a texto antes de que llegue a la memoria.
+
+Limitaciones: el historial vive en un diccionario en memoria (se pierde al reiniciar) y crece con cada turno, lo que aumenta el costo por llamada. `RunnableWithMessageHistory` imprime un `LangChainDeprecationWarning`; es un aviso, no un error.
+
+Pruebas sin red en `tests/test_agente_herramientas.py` (herramientas, validación Pydantic, memoria de dos turnos, aislamiento entre sesiones y salida en bloques de Gemini). `python src/agente_con_herramientas.py` hace las pruebas reales con la API.
