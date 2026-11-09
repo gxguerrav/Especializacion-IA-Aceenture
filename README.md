@@ -208,3 +208,12 @@ Sobre el mismo agente se agregaron dos piezas:
 Limitaciones: el historial vive en un diccionario en memoria (se pierde al reiniciar) y crece con cada turno, lo que aumenta el costo por llamada. `RunnableWithMessageHistory` imprime un `LangChainDeprecationWarning`; es un aviso, no un error.
 
 Pruebas sin red en `tests/test_agente_herramientas.py` (herramientas, validación Pydantic, memoria de dos turnos, aislamiento entre sesiones y salida en bloques de Gemini). `python src/agente_con_herramientas.py` hace las pruebas reales con la API.
+## Límites de autonomía y supervisión humana (Bloque 23)
+
+Se agregó una tercera herramienta, `generar_reembolso`, de **riesgo alto** (mueve dinero de forma irreversible), y tres piezas para controlarla:
+
+- **Aprobación humana (`src/supervision.py`):** `esperar_aprobacion` pide `s/n` por consola con límite de tiempo (300 s). Solo `s` aprueba; timeout o falta de entrada cuentan como rechazo. Usa un hilo con `Event` en vez de `select()` de la lección, porque `select()` no funciona sobre stdin en Windows. `registrar_aprobacion` guarda cada decisión.
+- **Trazas (`src/trazas.py`):** `registrar_traza` agrega cada interacción a `trazas_agente.jsonl`; `marcar_repeticiones_sospechosas` señala sesiones donde la misma herramienta se llamó dos veces seguidas.
+- **Documento de límites:** `docs/limites_autonomia_agente.md` (riesgo por herramienta, cuáles piden aprobación, revisión de trazas y plan ante comportamiento inesperado).
+
+`python src/agente_con_herramientas.py --reembolso` agrega una cuarta prueba real que pide aprobación por consola. Sin la bandera, el script no pide nada. El reembolso está simulado (no llama a un sistema de pagos). Pruebas sin red en `tests/test_supervision_trazas.py`.

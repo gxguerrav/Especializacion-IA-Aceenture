@@ -16,6 +16,8 @@ El modelo entra como parámetro para poder reemplazarlo en las pruebas.
 
 Ejecutar: python src/agente_con_herramientas.py
 """
+import sys
+
 from dotenv import load_dotenv
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.chat_history import InMemoryChatMessageHistory
@@ -25,6 +27,9 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
+
+from supervision import esperar_aprobacion, registrar_aprobacion, registro_aprobaciones
+from trazas import registrar_traza
 
 MODELO = "gemini-3.5-flash-lite"
 
@@ -91,7 +96,42 @@ def calcular_costo_pedido(kilos_cilindro: int, cantidad: int) -> str:
         return f"No existe el cilindro de {kilos_cilindro} kg. Disponibles: {disponibles}."
 
 
-HERRAMIENTAS = [consultar_estado_pedido, calcular_costo_pedido]
+class ArgumentosReembolso(BaseModel):
+    numero_pedido: str = Field(
+        description="Número del pedido a reembolsar, por ejemplo 'GAS-1002'."
+    )
+    monto: float = Field(description="Monto a reembolsar en pesos, mayor que cero.")
+
+
+@tool(args_schema=ArgumentosReembolso)
+def generar_reembolso(numero_pedido: str, monto: float) -> str:
+    """Genera un reembolso para un pedido. Acción irreversible que mueve dinero:
+    requiere aprobación humana antes de ejecutarse. Usar solo cuando el cliente
+    pide explícitamente un reembolso."""
+    numero = numero_pedido.strip().upper()
+    # Se valida antes de molestar a un supervisor con una solicitud que no puede proceder.
+    if numero not in PEDIDOS:
+        return f"No se encontró un pedido con el número {numero_pedido}."
+    if monto <= 0:
+        return "El monto del reembolso debe ser mayor que cero."
+
+    mensaje = (
+        f"El agente quiere reembolsar ${monto:,.0f} para el pedido {numero}. "
+        "¿Aprobar? (s/n): "
+    ).replace(",", ".")
+    aprobado = esperar_aprobacion(mensaje)
+    registrar_aprobacion(
+        herramienta="generar_reembolso",
+        argumentos={"numero_pedido": numero, "monto": monto},
+        aprobado=aprobado,
+    )
+    if not aprobado:
+        return "Reembolso no aprobado por el supervisor humano."
+    # Simulado: en un sistema real, aquí se llamaría al sistema de pagos.
+    return f"Reembolso de ${monto:,.0f} generado para el pedido {numero}.".replace(",", ".")
+
+
+HERRAMIENTAS = [consultar_estado_pedido, calcular_costo_pedido, generar_reembolso]
 
 PROMPT_AGENTE = ChatPromptTemplate.from_messages([
     (
@@ -99,7 +139,10 @@ PROMPT_AGENTE = ChatPromptTemplate.from_messages([
         "Eres un asistente de atención al cliente de una empresa que vende gas en "
         "cilindros a domicilio. Responde usando las herramientas disponibles cuando "
         "las necesites. No inventes datos que no tengas, como teléfonos, correos o "
-        "direcciones: si no los conoces, di que no cuentas con esa información.",
+        "direcciones: si no los conoces, di que no cuentas con esa información. "
+        "Informa el resultado de un reembolso tal como lo devuelve la herramienta: "
+        "si dice que no fue aprobado, dilo sin insistir; si dice que fue generado, "
+        "confírmalo sin mencionar aprobaciones pendientes.",
     ),
     MessagesPlaceholder("chat_history"),
     ("human", "{entrada}"),
@@ -164,40 +207,53 @@ def texto_respuesta(resultado):
     return salida
 
 
+def consultar(agente, session_id, entrada):
+    """Invoca al agente y deja la interacción en trazas_agente.jsonl (Bloque 23)."""
+    resultado = agente.invoke(
+        {"entrada": entrada}, {"configurable": {"session_id": session_id}}
+    )
+    registrar_traza(session_id, entrada, resultado)
+    return resultado
+
+
 def main():
     load_dotenv()
     ejecutor = crear_ejecutor()
     agente, obtener_historial = crear_agente_con_memoria(ejecutor)
 
     # Prueba 1: dos turnos con el mismo session_id; el segundo no repite el pedido.
-    cfg1 = {"configurable": {"session_id": "cliente_1"}}
-    r1 = agente.invoke(
-        {"entrada": "¿Dónde está mi pedido GAS-1001, con su historial?"}, cfg1
-    )
+    r1 = consultar(agente, "cliente_1", "¿Dónde está mi pedido GAS-1001, con su historial?")
     print("Respuesta:", texto_respuesta(r1))
     print("Herramientas:", herramientas_usadas(r1))
     assert herramientas_usadas(r1)[0] == "consultar_estado_pedido_con_historial"
 
-    r2 = agente.invoke({"entrada": "¿Y ese pedido ya fue entregado?"}, cfg1)
+    r2 = consultar(agente, "cliente_1", "¿Y ese pedido ya fue entregado?")
     print("Respuesta:", texto_respuesta(r2))
     print("Herramientas:", herramientas_usadas(r2))
     assert len(obtener_historial("cliente_1").messages) == 4
 
     # Prueba 2: otro session_id no debe saber nada del primero.
-    cfg2 = {"configurable": {"session_id": "cliente_2"}}
-    r3 = agente.invoke({"entrada": "¿De qué pedido te pregunté?"}, cfg2)
+    r3 = consultar(agente, "cliente_2", "¿De qué pedido te pregunté?")
     print("Respuesta:", texto_respuesta(r3))
     assert herramientas_usadas(r3) == []
     assert len(obtener_historial("cliente_2").messages) == 2
     assert len(obtener_historial("cliente_1").messages) == 4
 
     # Prueba 3: la herramienta de costo sigue funcionando.
-    r4 = agente.invoke(
-        {"entrada": "¿Cuánto me cuestan 3 cilindros de 15 kilos?"}, cfg2
-    )
+    r4 = consultar(agente, "cliente_2", "¿Cuánto me cuestan 3 cilindros de 15 kilos?")
     print("Respuesta:", texto_respuesta(r4))
     print("Herramientas:", herramientas_usadas(r4))
     assert herramientas_usadas(r4)[0] == "calcular_costo_pedido"
+
+    # Prueba 4 (Bloque 23, solo con --reembolso): herramienta de riesgo alto. Pide
+    # aprobación por consola (responde s/n); sin respuesta en 5 minutos, se rechaza.
+    if "--reembolso" in sys.argv:
+        r5 = consultar(agente, "cliente_3", "Quiero que me reembolsen $15000 del pedido GAS-1002")
+        print("Respuesta:", texto_respuesta(r5))
+        print("Herramientas:", herramientas_usadas(r5))
+        print("Registro de aprobaciones:", registro_aprobaciones)
+        assert herramientas_usadas(r5)[0] == "generar_reembolso"
+        assert len(registro_aprobaciones) == 1
 
 
 if __name__ == "__main__":
