@@ -28,47 +28,58 @@ MODELO_EMBEDDINGS = "models/gemini-embedding-001"
 CHUNK_SIZE = 250
 CHUNK_OVERLAP = 40
 
-# Cada documento tiene un tema distinto de la miniaplicación (fuente en metadatos).
+# Base de conocimiento del asistente de gas en cilindros. Cada documento es un tema
+# distinto del negocio (su nombre queda como "fuente" en los metadatos) y solo usa
+# datos que ya existen en el proyecto: catalogo de prompts/banco.py y herramientas
+# de src/agente_con_herramientas.py.
 CORPUS = [
     {
-        "fuente": "reintentos",
+        "fuente": "catalogo_precios",
         "texto": (
-            "El cliente de la API reintenta hasta 3 veces ante un TimeoutError o un "
-            "error temporal (429, 5xx), con espera creciente entre intentos "
-            "(backoff exponencial con techo y jitter)."
+            "Vendemos cilindros de gas de 5 kg a $12.000, de 11 kg a $20.000, de "
+            "15 kg a $27.000 y de 45 kg a $75.000. No existen otros tamanos ni "
+            "precios fuera de este catalogo."
         ),
     },
     {
-        "fuente": "autenticacion",
+        "fuente": "despacho",
         "texto": (
-            "Los errores de autenticación (401 y 403) nunca se reintentan: fallan de "
-            "inmediato con un ValueError, porque una clave rechazada no se arregla "
-            "reintentando."
+            "El despacho a domicilio es gratuito para todos los pedidos. Para "
+            "agendar la entrega necesitamos la direccion completa del cliente."
         ),
     },
     {
-        "fuente": "costo",
+        "fuente": "como_comprar",
         "texto": (
-            "El costo de cada llamada se calcula a partir de totalTokenCount en "
-            "usageMetadata y la tarifa vigente por cada 1000 tokens, y se acumula "
-            "en una variable de sesión."
+            "Para armar un pedido se necesitan tres datos: el tipo de cilindro "
+            "(5, 11, 15 o 45 kg), la cantidad de cilindros y la direccion de "
+            "entrega. El total es el precio del cilindro multiplicado por la "
+            "cantidad."
         ),
     },
     {
-        "fuente": "agente",
+        "fuente": "estado_pedido",
         "texto": (
-            "El agente de atención de pedidos decide por sí mismo qué herramienta "
-            "usar según su descripción: consultar el estado de un pedido, calcular "
-            "el costo de un pedido o generar un reembolso, que exige aprobación "
-            "humana antes de ejecutarse."
+            "Cada pedido tiene un numero con formato GAS-1001. Su estado avanza "
+            "por estos pasos: recibido, preparado en bodega, en camino y "
+            "entregado. El cliente puede consultar el estado actual o el "
+            "historial completo con su numero de pedido."
         ),
     },
     {
-        "fuente": "pruebas",
+        "fuente": "reembolsos",
         "texto": (
-            "Las pruebas unitarias del cliente usan mocks en lugar de llamar a la "
-            "API real, de forma que la suite completa corre en menos de un segundo "
-            "y no gasta tokens."
+            "Los reembolsos solo se generan cuando el cliente los pide "
+            "explicitamente. Mueven dinero y no se pueden deshacer, por lo que "
+            "requieren aprobacion de un supervisor humano antes de ejecutarse."
+        ),
+    },
+    {
+        "fuente": "reclamos",
+        "texto": (
+            "Si el cliente tiene un reclamo, el asistente lo clasifica como "
+            "reclamo y no inventa soluciones. Un reembolso solo procede sobre "
+            "un pedido existente y con un monto mayor que cero."
         ),
     },
 ]
@@ -85,6 +96,14 @@ def main():
         metadatas=[{"fuente": doc["fuente"]} for doc in CORPUS],
     )
 
+    # ids predecibles por chunk (fuente-0, fuente-1...): permiten etiquetar el conjunto
+    # de evaluacion de recuperacion del Bloque 27.
+    ids, contador = [], {}
+    for chunk in chunks:
+        fuente = chunk.metadata["fuente"]
+        ids.append(f"{fuente}-{contador.get(fuente, 0)}")
+        contador[fuente] = contador.get(fuente, 0) + 1
+
     embeddings = GoogleGenerativeAIEmbeddings(model=MODELO_EMBEDDINGS)
 
     # Reindexar debe reemplazar el índice, no acumular duplicados: from_documents
@@ -99,6 +118,7 @@ def main():
     try:
         Chroma.from_documents(
             documents=chunks,
+            ids=ids,
             embedding=embeddings,
             collection_name=NOMBRE_COLECCION,
             persist_directory=DIRECTORIO_VECTORSTORE,
