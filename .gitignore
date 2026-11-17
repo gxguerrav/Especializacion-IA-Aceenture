@@ -17,5 +17,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Índice vectorial de Chroma (contenido regenerable con src/indexar_corpus.py)
+vectorstore/
+
 # Logs
 *.log
