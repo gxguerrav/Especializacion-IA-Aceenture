@@ -1,0 +1,18 @@
+Fecha: 2026-11-17
+Configuracion: k=3, chunk_size=250, chunk_overlap=40
+
+0.33  1.00  cuanto cuesta el cilindro de 15 kilos
+0.33  1.00  que tamanos de cilindro venden
+0.33  1.00  el despacho a domicilio tiene costo
+0.33  1.00  que necesito para agendar la entrega
+0.33  1.00  que datos se necesitan para armar un pedido
+0.33  1.00  como se calcula el total de mi pedido
+0.33  1.00  por que pasos avanza el estado de un pedido
+0.33  1.00  como consulto el historial de mi pedido
+0.33  1.00  quien aprueba un reembolso
+0.33  1.00  se puede deshacer un reembolso
+0.33  1.00  que hace el asistente si tengo un reclamo
+0.33  1.00  cuando procede un reembolso sobre un pedido
+0.00  n/a  aceptan pago con tarjeta de credito
+
+promedio -> precision: 0.308 recall: 1.000
