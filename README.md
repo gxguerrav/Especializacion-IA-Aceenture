@@ -217,3 +217,15 @@ Se agregó una tercera herramienta, `generar_reembolso`, de **riesgo alto** (mue
 - **Documento de límites:** `docs/limites_autonomia_agente.md` (riesgo por herramienta, cuáles piden aprobación, revisión de trazas y plan ante comportamiento inesperado).
 
 `python src/agente_con_herramientas.py --reembolso` agrega una cuarta prueba real que pide aprobación por consola. Sin la bandera, el script no pide nada. El reembolso está simulado (no llama a un sistema de pagos). Pruebas sin red en `tests/test_supervision_trazas.py`.
+
+## Logging estructurado e inyección de prompt (Bloque 31)
+
+`src/logging_rag.py` instrumenta el flujo RAG con tres piezas:
+
+- **Logs JSON con `trace_id`:** un evento por línea; el `trace_id` vive en un `contextvar` que se fija en cada consulta (no es global), así que dos consultas no se mezclan. Con solo leer los logs se reconstruye cuántos documentos se recuperaron, cuántos se descartaron y cuánto costó la llamada al modelo.
+- **Registro de consumo:** `registrar_consumo` loguea `input/output/total_tokens` de `usage_metadata` con el `trace_id` de su consulta (con `.get()`, no rompe si el campo falta).
+- **Filtro de inyección:** descarta documentos recuperados que coinciden con patrones sospechosos y lo loguea (`documento_descartado_por_inyeccion`). Se combina con roles `System`/`Human` separados y contexto delimitado en `<contexto>`.
+
+Gobernanza: los logs guardan longitud y huella (sha256 truncado) de la pregunta y los documentos, nunca su contenido. El filtro es una lista negra: no detecta sinónimos ni otros idiomas, es una capa entre varias, no una garantía.
+
+`python src/logging_rag.py` corre la demo sin red; `python src/logging_rag.py --real "pregunta"` usa el índice y Gemini reales. Pruebas sin red en `tests/test_logging_rag.py`.
