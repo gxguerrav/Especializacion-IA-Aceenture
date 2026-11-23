@@ -19,6 +19,7 @@ Thumbs.db
 
 # Índice vectorial de Chroma (contenido regenerable con src/indexar_corpus.py)
 vectorstore/
+vectorstore_sim/
 
 # Logs
 *.log

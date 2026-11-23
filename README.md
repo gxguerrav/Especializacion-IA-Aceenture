@@ -229,3 +229,60 @@ Se agregó una tercera herramienta, `generar_reembolso`, de **riesgo alto** (mue
 Gobernanza: los logs guardan longitud y huella (sha256 truncado) de la pregunta y los documentos, nunca su contenido. El filtro es una lista negra: no detecta sinónimos ni otros idiomas, es una capa entre varias, no una garantía.
 
 `python src/logging_rag.py` corre la demo sin red; `python src/logging_rag.py --real "pregunta"` usa el índice y Gemini reales. Pruebas sin red en `tests/test_logging_rag.py`.
+
+## Gate 2: servicio RAG integrado (`src/servicio_rag.py`)
+
+Un solo flujo que reúne las piezas del Módulo 2: índice persistido, recuperación con cita, filtro de inyección, logging con `trace_id`, latencia y costo, versionado de prompts y supervisión humana.
+
+### Instalar y ejecutar de punta a punta
+
+Con el entorno virtual activo y las dependencias instaladas (ver *Instalación*):
+
+```powershell
+python verificar_entorno.py                  # comprueba paquetes, .env e índice
+python src/servicio_rag.py                   # indexa (1a vez), consulta y corre la supervisión
+python src/servicio_rag.py "el despacho a domicilio tiene costo" --decision aprobar
+```
+
+- **Modo simulado (por defecto):** embeddings léxicos locales y un modelo simulado; no necesita clave ni red. El índice queda en `vectorstore_sim/` y la salida lo marca como simulado.
+- **Modo real:** `python src/servicio_rag.py "pregunta" --real` usa Gemini y el índice `vectorstore/`. Requiere `GEMINI_API_KEY` en el `.env`; el servicio crea o actualiza ese índice por su cuenta (o puedes crearlo antes con `python src/indexar_corpus.py`).
+- **Supervisión:** sin `--decision`, el servicio pide `s/n` por consola antes de activar la versión del prompt; `--decision aprobar|rechazar` lo resuelve sin interacción.
+
+Cada consulta devuelve `respuesta` (con línea `Fuentes:`), `fuentes`, `trace_id`, `metricas` (tiempos por etapa, tokens y costo estimado) y `auditoria` (un evento por etapa).
+
+### Qué cubre cada dimensión de la rúbrica
+
+| Dimensión | Dónde está |
+|---|---|
+| Pipeline RAG funcional | `src/servicio_rag.py`; índice persistido y actualización incremental por huella en `sincronizar_indice` (`indice_creado` / `indice_actualizado` / `indice_reutilizado`) |
+| Recuperación y citación | Contexto numerado `[N]` y fuentes en la respuesta; sin cita válida no se entrega la respuesta. Métricas en `src/evaluacion_recuperacion.py` y `resultados_evaluacion.txt` (precisión 0.308, recall 1.000 con k=3) |
+| Costo, latencia y checklist | `latencia_y_costo` por consulta; corridas reales en `registros_latencia_costo.jsonl` (`src/registro_rag.py`) |
+| Personalización justificada | `docs/decision_personalizacion.md` (RAG, con matriz de puntaje sobre este caso) |
+| Observabilidad | `src/logging_rag.py`: logs JSON con `trace_id` por consulta y registro de consumo |
+| Seguridad, versionado y gobernanza | Filtro de inyección (`src/logging_rag.py`), versiones de prompt (`src/registro_prompts.py`), supervisión con `interrupt()`/`Command` (`src/grafo_supervision.py`) y matriz de riesgos (`src/matriz_riesgos.py`) |
+
+Los logs guardan longitudes, conteos y huellas (sha256 truncado), nunca la pregunta ni el texto de los documentos. El filtro de inyección es una lista negra: no detecta sinónimos ni otros idiomas.
+
+### Pruebas y autoevaluación
+
+```powershell
+python -m pytest test_gate2.py -v            # los 4 criterios no compensables + índice, inyección y trace_id
+python -m pytest tests -v                    # pruebas del resto del proyecto
+python src/autoevaluacion_gate2.py           # promedio ponderado y criterios no compensables
+python src/matriz_riesgos.py                 # matriz de riesgos
+```
+
+Los cuatro criterios no compensables: el pipeline corre sin excepciones, cada respuesta cita su fuente, los logs no exponen contenido crudo y la supervisión humana pausa y reanuda de verdad. `test_gate2.py` los comprueba sobre el servicio real, con un índice temporal.
+
+### Limitaciones conocidas
+
+- El modo simulado sirve para ensayar el pipeline; su calidad de respuesta no es la del modelo real.
+- `InMemorySaver` guarda el estado de la supervisión solo mientras vive el proceso.
+- El corpus no tiene un documento de medios de pago, por lo que esa consulta no se puede responder (ver `docs/decision_personalizacion.md`).
+
+### Registro del ensayo funcional del Gate 2
+
+- Fecha: 2026-11-23
+- Procedimiento: venv nuevo, `pip install -r requirements.txt`, `python verificar_entorno.py`, `python src/servicio_rag.py` (índice borrado antes de la primera corrida), segunda corrida con `--decision rechazar`, `python -m pytest test_gate2.py -v` y `python -m pytest tests -q`.
+- Resultado: `test_gate2.py` 7/7 y `tests/` 99/99 pasan. Primera corrida: `indice_creado` (6 chunks); segunda: `indice_reutilizado`. La respuesta cita su fuente, los eventos comparten un `trace_id` por consulta y la supervisión pausa y reanuda con aprobación y con rechazo.
+- Limitación: este ensayo corrió en modo **simulado** (sin `GEMINI_API_KEY`). La corrida real con Gemini (`python src/servicio_rag.py "pregunta" --real`) queda por documentar aquí antes de entregar.
