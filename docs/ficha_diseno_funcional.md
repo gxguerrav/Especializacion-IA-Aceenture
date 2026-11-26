@@ -40,8 +40,23 @@ Diagrama: docs/diagrama_arquitectura.png
 
 ## 4. Criterios de aceptación
 
-[PENDIENTE: se completa en el Bloque 34]
+- CA-01 (RF-01): Al enviar la pregunta "¿Cuánto cuesta un cilindro de 15 kg?" al endpoint de consulta, la respuesta es un JSON con los campos "respuesta" y "fuentes".
+- CA-02 (RF-02): Para esa misma pregunta, "fuentes" contiene "catalogo_precios" y la respuesta menciona "$27.000".
+- CA-03 (RF-02): Ante la pregunta "¿Aceptan pagos con criptomonedas?", que el corpus no cubre, la respuesta contiene el texto "No tengo informacion" y "fuentes" va vacía.
+- CA-04 (RF-03): Al consultar el estado del pedido simulado "GAS-1001", la respuesta indica "en camino" y la hora de llegada que figura en los datos simulados.
+- CA-05 (RF-03): Al consultar el pedido inexistente "GAS-9999", la respuesta dice que no existe ese pedido y no inventa ningún estado.
+- CA-06 (RNF-01): En las 10 consultas de prueba, al menos 9 responden en menos de 8 segundos.
+- CA-07 (RNF-02): Tras ejecutar las 10 consultas de prueba, ninguna línea del registro contiene el texto completo de una pregunta.
+- CA-08 (RNF-03): Siguiendo solo el README en un equipo limpio, el servicio responde a CA-01 a los 10 minutos o antes desde el inicio.
+- CA-09 (RNF-04): En las 10 consultas de prueba con documento esperado conocido, al menos 8 devuelven ese documento en "fuentes".
 
 ## 5. Plan de construcción por hitos
 
-[PENDIENTE: se completa en el Bloque 34]
+Horas disponibles: 20 h
+Margen de imprevistos: 4 h
+
+- H1 (3 h): Servicio FastAPI con el endpoint de consulta. Cubre: RF-01. Se comprueba con: CA-01.
+- H2 (2 h): Respuestas con fuente desde el índice persistido. Cubre: RF-02. Se comprueba con: CA-02, CA-03.
+- H3 (3 h): Servicio empaquetado en un contenedor. Cubre: RNF-03. Se comprueba con: CA-08.
+- H4 (2 h): Consulta de estado de pedido con datos simulados. Cubre: RF-03. Se comprueba con: CA-04, CA-05.
+- H5 (6 h): Pruebas, documentación y ensayo de la defensa. Cubre: RNF-01, RNF-02, RNF-04. Se comprueba con: CA-06, CA-07, CA-09.
