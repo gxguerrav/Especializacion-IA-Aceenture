@@ -29,6 +29,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -81,7 +82,9 @@ class EmbeddingsLexicos(Embeddings):
     def _palabras(cls, texto):
         """Minúsculas, sin palabras vacías, 'kilos' -> 'kg', sinónimos de precio y sin 's' final."""
         palabras = []
-        for palabra in re.findall(r"\w+", texto.lower()):
+        sin_tildes = "".join(
+            c for c in unicodedata.normalize("NFD", texto.lower()) if not unicodedata.combining(c))
+        for palabra in re.findall(r"\w+", sin_tildes):
             if palabra in cls.PALABRAS_VACIAS:
                 continue
             if palabra in ("kilo", "kilos"):
@@ -118,9 +121,12 @@ class ModeloSimulado:
         lineas = re.findall(r"^\[(\d+)\] (.+)$", pedido, flags=re.MULTILINE)
         pregunta = re.search(r"^Pregunta: (.+)$", pedido, flags=re.MULTILINE)
         palabras = set(EmbeddingsLexicos._palabras(pregunta.group(1) if pregunta else ""))
-        if lineas:
-            numero, linea = max(
-                lineas, key=lambda nl: len(palabras & set(EmbeddingsLexicos._palabras(nl[1]))))
+        mejor = max(
+            lineas, key=lambda nl: len(palabras & set(EmbeddingsLexicos._palabras(nl[1]))),
+            default=None)
+        # Sin ninguna palabra en comun con la pregunta, el contexto no la responde: no cita.
+        if mejor and palabras & set(EmbeddingsLexicos._palabras(mejor[1])):
+            numero, linea = mejor
             texto = f"Segun el contexto recuperado: {linea} [{numero}]"
         else:
             texto = "El contexto recuperado no contiene la informacion pedida."
